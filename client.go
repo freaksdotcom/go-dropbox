@@ -81,25 +81,31 @@ func (c *Client) do(req *http.Request) (io.ReadCloser, int64, error) {
 	error_retry_time := 0.5
 request_loop:
 	for error_retry_time < 300 {
+		c.Config.mux.Lock()
 		res, err = c.HTTPClient.Do(req)
 		switch res.StatusCode {
 		case 429:
 			log.Print(fmt.Sprintf("Received Retry status code %d.", res.StatusCode))
 			sleep_time, conv_e := strconv.Atoi(res.Header.Get("Retry-After"))
 			if conv_e != nil {
+				log.Print("Error decoding Retry-After value")
 				sleep_time = 60
 			}
 			log.Print(fmt.Sprintf("Sleeping for %d seconds.", sleep_time))
 			time.Sleep(time.Duration(sleep_time) * time.Second)
+			c.Config.mux.Unlock()
 		case 500:
 			log.Print(fmt.Sprintf("Received Error status code %d.", res.StatusCode))
 			log.Print(fmt.Sprintf("Sleeping for %d seconds.", error_retry_time))
 			time.Sleep(time.Duration(error_retry_time) * time.Second)
 			error_retry_time *= 1.5
+			c.Config.mux.Unlock()
 		default:
 			break request_loop
 		}
 	}
+	c.Config.mux.Unlock()
+
 	if err != nil {
 		log.Print(fmt.Sprintf("URL: %s - Method: %s", req.URL, req.Method))
 		log.Print(fmt.Sprintf("HTTP Error StatusCode %d", res.StatusCode))
