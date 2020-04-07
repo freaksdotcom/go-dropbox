@@ -73,37 +73,47 @@ func (c *Client) download(path string, in interface{}, r io.Reader) (io.ReadClos
 	return c.do(req)
 }
 
-// perform the request.
-func (c *Client) do(req *http.Request) (io.ReadCloser, int64, error) {
-	var err error
-	var res *http.Response
-	error_retry_time := 0.5
+func (c *Client) retriable_request(req *http.Request, backoff_start ...float32) (res *http.Response, err error) {
+	var error_retry_time float32
+	if len(backoff_start) > 0 {
+		error_retry_time = backoff_start[0]
+	}
+	if error_retry_time <= 0 {
+		error_retry_time = 0.5
+	}
+
 request_loop:
 	for error_retry_time < 300 {
 		c.Config.mux.Lock()
+		defer c.Config.mux.Unlock()
+
+		var sleep_time int
 		res, err = c.HTTPClient.Do(req)
 		switch {
 		case res.StatusCode == 429:
-			log.Print("Received Retry status code %d.", res.StatusCode)
-			sleep_time, conv_e := strconv.Atoi(res.Header.Get("Retry-After"))
-			if conv_e != nil {
+			log.Printf("Received Retry status code %d.", res.StatusCode)
+			if time, err := strconv.Atoi(res.Header.Get("Retry-After")); err != nil {
 				log.Print("Error decoding Retry-After value")
 				sleep_time = 60
+			} else {
+				sleep_time = time
 			}
-			log.Printf("Sleeping for %d seconds.", sleep_time)
-			time.Sleep(time.Duration(sleep_time) * time.Second)
-			c.Config.mux.Unlock()
 		case res.StatusCode >= 500: // Retry on 5xx
-			log.Printf("Received Error status code %d.", res.StatusCode)
-			log.Printf("Sleeping for %d seconds.", error_retry_time)
-			time.Sleep(time.Duration(error_retry_time) * time.Second)
+			sleep_time = int(error_retry_time)
 			error_retry_time *= 1.5
-			c.Config.mux.Unlock()
 		default:
 			break request_loop
 		}
+		log.Printf("Sleeping for %d seconds.", sleep_time)
+		time.Sleep(time.Duration(sleep_time) * time.Second)
+		c.Config.mux.Unlock()
 	}
-	c.Config.mux.Unlock()
+	return
+}
+
+// perform the request.
+func (c *Client) do(req *http.Request) (io.ReadCloser, int64, error) {
+	res, err := c.retriable_request(req, 0.5)
 
 	if err != nil {
 		if b, err := ioutil.ReadAll(res.Body); err == nil {
