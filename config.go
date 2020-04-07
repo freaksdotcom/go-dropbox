@@ -6,7 +6,8 @@ import (
 )
 
 // Global mutex for the process.
-var mux sync.Mutex
+var mux [2]sync.Mutex
+var i int
 
 // Config for the Dropbox clients.
 type Config struct {
@@ -17,9 +18,11 @@ type Config struct {
 
 // NewConfig with the given access token.
 func NewConfig(accessToken string) *Config {
+	m := mux[i%2]
+	i++
 	return &Config{
 		HTTPClient:  http.DefaultClient,
 		AccessToken: accessToken,
-		mux:         &mux,
+		mux:         &m,
 	}
 }
