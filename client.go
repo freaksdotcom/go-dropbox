@@ -106,10 +106,8 @@ request_loop:
 	c.Config.mux.Unlock()
 
 	if err != nil {
-		log.Printf("URL: %s - Method: %s", req.URL, req.Method)
-		log.Printf("HTTP Error StatusCode %d", res.StatusCode)
 		if b, err := ioutil.ReadAll(res.Body); err == nil {
-			log.Print(string(b))
+			logResponse(req, res, string(b))
 		} else {
 			log.Printf("Error reading body: %s", err)
 
@@ -133,9 +131,7 @@ request_loop:
 	if strings.Contains(kind, "text/plain") {
 		if b, err := ioutil.ReadAll(res.Body); err == nil {
 			e.Summary = string(b)
-			log.Printf("URL: %s - Method: %s", req.URL, req.Method)
-			log.Printf("HTTP StatusCode %d", res.StatusCode)
-			log.Print(e.Summary)
+			logResponse(req, res, e.Summary)
 			return nil, 0, e
 		} else {
 			return nil, 0, err
@@ -143,13 +139,17 @@ request_loop:
 	}
 
 	if err := json.NewDecoder(res.Body).Decode(e); err != nil {
-		log.Printf("URL: %s - Method: %s", req.URL, req.Method)
-		log.Printf("HTTP StatusCode %d", res.StatusCode)
-		log.Print(e.Summary)
+		logResponse(req, res, e.Summary)
 		return nil, 0, err
 	}
-	log.Printf("URL: %s - Method: %s", req.URL, req.Method)
-	log.Printf("HTTP StatusCode %d", res.StatusCode)
-	log.Print(e.Summary)
 	return nil, 0, e
+}
+
+func logResponse(req *http.Request, res *http.Response, body string) {
+	if res.StatusCode != 409 {
+		log.Printf("URL: %s - Method: %s", req.URL, req.Method)
+		log.Printf("HTTP StatusCode %d", res.StatusCode)
+		log.Print(body)
+
+	}
 }
