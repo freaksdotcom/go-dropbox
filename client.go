@@ -94,8 +94,8 @@ request_loop:
 			time.Sleep(time.Duration(sleep_time) * time.Second)
 			c.Config.mux.Unlock()
 		case res.StatusCode >= 500: // Retry on 5xx
-			log.Print(fmt.Sprintf("Received Error status code %d.", res.StatusCode))
-			log.Print(fmt.Sprintf("Sleeping for %d seconds.", error_retry_time))
+			log.Printf("Received Error status code %d.", res.StatusCode)
+			log.Printf("Sleeping for %d seconds.", error_retry_time)
 			time.Sleep(time.Duration(error_retry_time) * time.Second)
 			error_retry_time *= 1.5
 			c.Config.mux.Unlock()
