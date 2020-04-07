@@ -18,7 +18,7 @@ type Config struct {
 
 // NewConfig with the given access token.
 func NewConfig(accessToken string) *Config {
-	m := mux[i%2]
+	m := mux[i%len(mux)]
 	i++
 	return &Config{
 		HTTPClient:  http.DefaultClient,
