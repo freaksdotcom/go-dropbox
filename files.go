@@ -15,9 +15,7 @@ type Files struct {
 // NewFiles client.
 func NewFiles(config *Config) *Files {
 	return &Files{
-		Client: &Client{
-			Config: config,
-		},
+		Client: NewClient(config),
 	}
 }
 

@@ -9,8 +9,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
+
+// Global mutexes for the process.
+var client_mux [2]*sync.Mutex
+var client_mux_index int
 
 // Client implements a Dropbox client. You may use the Files and Users
 // clients directly if preferred, however Client exposes them both.
@@ -19,11 +24,15 @@ type Client struct {
 	Users   *Users
 	Files   *Files
 	Sharing *Sharing
+	mux     *sync.Mutex
 }
 
 // New client.
-func New(config *Config) *Client {
+func NewClient(config *Config) *Client {
+	m := client_mux[len(client_mux)%client_mux_index]
+	client_mux_index++
 	c := &Client{Config: config}
+	c.mux = m
 	c.Users = &Users{c}
 	c.Files = &Files{c}
 	c.Sharing = &Sharing{c}
@@ -84,7 +93,7 @@ func (c *Client) retriable_request(req *http.Request, backoff_start ...float32) 
 
 request_loop:
 	for error_retry_time < 300 {
-		c.Config.mux.Lock()
+		c.mux.Lock()
 
 		var sleep_time int
 		res, err = c.HTTPClient.Do(req)
@@ -101,12 +110,12 @@ request_loop:
 			sleep_time = int(error_retry_time)
 			error_retry_time *= 1.5
 		default:
-			c.Config.mux.Unlock()
+			c.mux.Unlock()
 			break request_loop
 		}
 		log.Printf("Sleeping for %d seconds.", sleep_time)
 		time.Sleep(time.Duration(sleep_time) * time.Second)
-		c.Config.mux.Unlock()
+		c.mux.Unlock()
 	}
 	return
 }
