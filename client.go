@@ -29,7 +29,7 @@ type Client struct {
 
 // New client.
 func NewClient(config *Config) *Client {
-	m := client_mux[len(client_mux)%client_mux_index]
+	m := client_mux[client_mux_index%len(client_mux)]
 	client_mux_index++
 	c := &Client{Config: config}
 	c.mux = m
