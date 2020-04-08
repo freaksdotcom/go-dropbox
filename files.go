@@ -7,16 +7,24 @@ import (
 	"time"
 )
 
+// Global mutex for the process.
+var mux [2]sync.Mutex
+var i int
+
 // Files client for files and folders.
 type Files struct {
 	*Client
+	mux *sync.Mutex
 }
 
 // NewFiles client.
 func NewFiles(config *Config) *Files {
+	m := mux[i%len(mux)]
+	i++
 	return &Files{
 		Client: &Client{
 			Config: config,
+			mux:    m,
 		},
 	}
 }

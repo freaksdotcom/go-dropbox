@@ -84,7 +84,7 @@ func (c *Client) retriable_request(req *http.Request, backoff_start ...float32) 
 
 request_loop:
 	for error_retry_time < 300 {
-		c.Config.mux.Lock()
+		c.mux.Lock()
 
 		var sleep_time int
 		res, err = c.HTTPClient.Do(req)
@@ -101,12 +101,12 @@ request_loop:
 			sleep_time = int(error_retry_time)
 			error_retry_time *= 1.5
 		default:
-			c.Config.mux.Unlock()
+			c.mux.Unlock()
 			break request_loop
 		}
 		log.Printf("Sleeping for %d seconds.", sleep_time)
 		time.Sleep(time.Duration(sleep_time) * time.Second)
-		c.Config.mux.Unlock()
+		c.mux.Unlock()
 	}
 	return
 }
