@@ -14,7 +14,7 @@ import (
 )
 
 // Global mutexes for the process.
-var client_mux [2]*sync.Mutex
+var client_mux [2]sync.Mutex
 var client_mux_index int
 
 // Client implements a Dropbox client. You may use the Files and Users
@@ -31,8 +31,9 @@ type Client struct {
 func NewClient(config *Config) *Client {
 	m := client_mux[client_mux_index%len(client_mux)]
 	client_mux_index++
+
 	c := &Client{Config: config}
-	c.mux = m
+	c.mux = &m
 	c.Users = &Users{c}
 	c.Files = &Files{c}
 	c.Sharing = &Sharing{c}
