@@ -6,7 +6,9 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"strconv"
 	"strings"
+	"time"
 )
 
 // Client implements a Dropbox client. You may use the Files and Users
@@ -72,7 +74,26 @@ func (c *Client) download(path string, in interface{}, r io.Reader) (io.ReadClos
 
 // perform the request.
 func (c *Client) do(req *http.Request) (io.ReadCloser, int64, error) {
-	res, err := c.HTTPClient.Do(req)
+	var err error
+	var res *http.Response
+	error_retry_time := 0.5
+request_loop:
+	for error_retry_time < 300 {
+		res, err = c.HTTPClient.Do(req)
+		switch {
+		case res.StatusCode == 429:
+			sleep_time, conv_e := strconv.Atoi(res.Header.Get("Retry-After"))
+			if conv_e != nil {
+				sleep_time = 60
+			}
+			time.Sleep(time.Duration(sleep_time) * time.Second)
+		case res.StatusCode >= 500: // Retry on 5xx
+			time.Sleep(time.Duration(error_retry_time) * time.Second)
+			error_retry_time *= 1.5
+		default:
+			break request_loop
+		}
+	}
 	if err != nil {
 		return nil, 0, err
 	}
@@ -102,6 +123,5 @@ func (c *Client) do(req *http.Request) (io.ReadCloser, int64, error) {
 	if err := json.NewDecoder(res.Body).Decode(e); err != nil {
 		return nil, 0, err
 	}
-
 	return nil, 0, e
 }
