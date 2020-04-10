@@ -72,6 +72,7 @@ func (c *Client) call(path string, in interface{}) (io.ReadCloser, error) {
 
 	log.Print("Getting response from channel.")
 	res := <-res_ch
+	close(res_ch)
 
 	r, err := *res.body, res.err
 	return r, err
@@ -104,6 +105,7 @@ func (c *Client) download(path string, in interface{}, r io.Reader) (io.ReadClos
 
 	log.Print("Getting response from channel.")
 	res := <-res_ch
+	close(res_ch)
 
 	return *res.body, res.content_length, res.err
 }
@@ -119,7 +121,7 @@ func background_requests(req_ch *chan *dbx_request) {
 			log.Print("Sending response")
 			*dbx_req.response_ch <- res
 			log.Print("Closing response channel")
-			close(*dbx_req.response_ch)
+			//close(*dbx_req.response_ch)
 
 		case <-shutdown_ch:
 			return
