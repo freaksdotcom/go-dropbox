@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 )
 
@@ -22,13 +23,29 @@ type Client struct {
 }
 
 // New client.
-func New(config *Config) *Client {
+func NewClient(config *Config) *Client {
 	c := &Client{Config: config}
 	c.Users = &Users{c}
 	c.Files = &Files{c}
 	c.Sharing = &Sharing{c}
+	req_once.Do(func() { background_requests(&req_ch) })
 	return c
 }
+
+type dbx_response struct {
+	body           *io.ReadCloser
+	content_length int64
+	err            error
+}
+
+type dbx_request struct {
+	request     *http.Request
+	response_ch *chan *dbx_response
+}
+
+var req_ch = make(chan *dbx_request, 16)
+var req_once = sync.Once{}
+var shutdown_ch = make(chan bool)
 
 // call rpc style endpoint.
 func (c *Client) call(path string, in interface{}) (io.ReadCloser, error) {
@@ -46,7 +63,12 @@ func (c *Client) call(path string, in interface{}) (io.ReadCloser, error) {
 	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	r, _, err := c.do(req)
+	res_ch := make(chan *dbx_response) // Not reused so it doesn't need to be > 1
+	req_ch <- &dbx_request{request: req, response_ch: &res_ch}
+
+	res := <-res_ch
+
+	r, err := *res.body, res.err
 	return r, err
 }
 
@@ -70,25 +92,36 @@ func (c *Client) download(path string, in interface{}, r io.Reader) (io.ReadClos
 		req.Header.Set("Content-Type", "application/octet-stream")
 	}
 
-	return c.do(req)
+	res_ch := make(chan *dbx_response) // Not reused so it doesn't need to be > 1
+	req_ch <- &dbx_request{request: req, response_ch: &res_ch}
+
+	res := <-res_ch
+
+	return *res.body, res.content_length, res.err
 }
 
-func (c *Client) retriable_request(req *http.Request, backoff_start ...float32) (res *http.Response, err error) {
-	var error_retry_time float32
-	if len(backoff_start) > 0 {
-		error_retry_time = backoff_start[0]
+func background_requests(req_ch *chan *dbx_request) {
+	for {
+		select {
+		case dbx_req := <-*req_ch:
+			body, content_len, err := do(dbx_req.request)
+			res := &dbx_response{body, content_len, err}
+			*dbx_req.response_ch <- res
+			close(*dbx_req.response_ch)
+
+		case <-shutdown_ch:
+			return
+		}
 	}
-	if error_retry_time <= 0 {
-		error_retry_time = 0.5
-	}
+}
+
+func retriable_request(req *http.Request) (res *http.Response, err error) {
+	error_retry_time := 0.5
 
 request_loop:
 	for error_retry_time < 300 {
-		c.Config.mux.Lock()
-		defer c.Config.mux.Unlock()
-
-		var sleep_time int
-		res, err = c.HTTPClient.Do(req)
+		var sleep_time float64
+		res, err = http.DefaultClient.Do(req)
 		switch {
 		case res.StatusCode == 429:
 			log.Printf("Received Retry status code %d.", res.StatusCode)
@@ -96,24 +129,23 @@ request_loop:
 				log.Print("Error decoding Retry-After value")
 				sleep_time = 60
 			} else {
-				sleep_time = time
+				sleep_time = float64(time)
 			}
 		case res.StatusCode >= 500: // Retry on 5xx
-			sleep_time = int(error_retry_time)
+			sleep_time = error_retry_time
 			error_retry_time *= 1.5
 		default:
 			break request_loop
 		}
 		log.Printf("Sleeping for %d seconds.", sleep_time)
 		time.Sleep(time.Duration(sleep_time) * time.Second)
-		c.Config.mux.Unlock()
 	}
 	return
 }
 
 // perform the request.
-func (c *Client) do(req *http.Request) (io.ReadCloser, int64, error) {
-	res, err := c.retriable_request(req, 0.5)
+func do(req *http.Request) (*io.ReadCloser, int64, error) {
+	res, err := retriable_request(req)
 
 	if err != nil {
 		if b, err := ioutil.ReadAll(res.Body); err == nil {
@@ -126,7 +158,7 @@ func (c *Client) do(req *http.Request) (io.ReadCloser, int64, error) {
 	}
 
 	if res.StatusCode < 400 {
-		return res.Body, res.ContentLength, err
+		return &res.Body, res.ContentLength, err
 	}
 
 	defer res.Body.Close()
@@ -160,6 +192,5 @@ func logResponse(req *http.Request, res *http.Response, body string) {
 		log.Printf("URL: %s - Method: %s", req.URL, req.Method)
 		log.Printf("HTTP StatusCode %d", res.StatusCode)
 		log.Print(body)
-
 	}
 }

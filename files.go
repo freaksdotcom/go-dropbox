@@ -15,9 +15,7 @@ type Files struct {
 // NewFiles client.
 func NewFiles(config *Config) *Files {
 	return &Files{
-		Client: &Client{
-			Config: config,
-		},
+		Client: NewClient(config),
 	}
 }
 
@@ -63,7 +61,6 @@ func (c *Files) GetMetadata(in *GetMetadataInput) (out *GetMetadataOutput, err e
 	defer ioutil.ReadAll(body)
 
 	err = json.NewDecoder(body).Decode(&out)
-
 	return
 }
 
