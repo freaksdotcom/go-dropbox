@@ -13,6 +13,8 @@ import (
 	"time"
 )
 
+var REQUEST_ROUTINES = 2
+
 // Client implements a Dropbox client. You may use the Files and Users
 // clients directly if preferred, however Client exposes them both.
 type Client struct {
@@ -29,7 +31,11 @@ func NewClient(config *Config) *Client {
 	c.Files = &Files{c}
 	c.Sharing = &Sharing{c}
 	log.Print("Calling Once.Do")
-	req_once.Do(func() { go background_requests(&req_ch) })
+	req_once.Do(func() {
+		for i := 0; i < REQUEST_ROUTINES; i++ {
+			go background_requests(&req_ch)
+		}
+	})
 	log.Print("Once.Do done")
 	return c
 }
