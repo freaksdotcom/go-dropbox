@@ -29,7 +29,7 @@ func NewClient(config *Config) *Client {
 	c.Files = &Files{c}
 	c.Sharing = &Sharing{c}
 	log.Print("Calling Once.Do")
-	req_once.Do(func() { background_requests(&req_ch) })
+	req_once.Do(func() { go background_requests(&req_ch) })
 	log.Print("Once.Do done")
 	return c
 }
