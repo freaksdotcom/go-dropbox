@@ -35,7 +35,7 @@ func NewClient(config *Config) *Client {
 }
 
 type dbx_response struct {
-	body           *io.ReadCloser
+	body           io.ReadCloser
 	content_length int64
 	err            error
 }
@@ -72,9 +72,8 @@ func (c *Client) call(path string, in interface{}) (io.ReadCloser, error) {
 
 	log.Print("Getting response from channel.")
 	res := <-res_ch
-	close(res_ch)
 
-	r, err := *res.body, res.err
+	r, err := res.body, res.err
 	return r, err
 }
 
@@ -105,9 +104,8 @@ func (c *Client) download(path string, in interface{}, r io.Reader) (io.ReadClos
 
 	log.Print("Getting response from channel.")
 	res := <-res_ch
-	close(res_ch)
 
-	return *res.body, res.content_length, res.err
+	return res.body, res.content_length, res.err
 }
 
 func background_requests(req_ch *chan *dbx_request) {
@@ -121,7 +119,7 @@ func background_requests(req_ch *chan *dbx_request) {
 			log.Print("Sending response")
 			*dbx_req.response_ch <- res
 			log.Print("Closing response channel")
-			//close(*dbx_req.response_ch)
+			close(*dbx_req.response_ch)
 
 		case <-shutdown_ch:
 			return
@@ -158,7 +156,7 @@ request_loop:
 }
 
 // perform the request.
-func do(req *http.Request) (*io.ReadCloser, int64, error) {
+func do(req *http.Request) (io.ReadCloser, int64, error) {
 	res, err := retriable_request(req)
 
 	if err != nil {
@@ -172,7 +170,7 @@ func do(req *http.Request) (*io.ReadCloser, int64, error) {
 	}
 
 	if res.StatusCode < 400 {
-		return &res.Body, res.ContentLength, err
+		return res.Body, res.ContentLength, err
 	}
 
 	defer res.Body.Close()
