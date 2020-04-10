@@ -137,9 +137,15 @@ request_loop:
 			} else {
 				sleep_time = float64(time)
 			}
+			if b, err := ioutil.ReadAll(res.Body); err == nil {
+				logResponse(req, res, string(b))
+			} else {
+				log.Printf("Error reading body: %s", err)
+			}
 		case res.StatusCode >= 500: // Retry on 5xx
 			sleep_time = error_retry_time
 			error_retry_time *= 1.5
+			ioutil.ReadAll(res.Body)
 		default:
 			break request_loop
 		}
