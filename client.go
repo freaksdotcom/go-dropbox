@@ -30,13 +30,11 @@ func NewClient(config *Config) *Client {
 	c.Users = &Users{c}
 	c.Files = &Files{c}
 	c.Sharing = &Sharing{c}
-	log.Print("Calling Once.Do")
 	req_once.Do(func() {
 		for i := 0; i < REQUEST_ROUTINES; i++ {
 			go background_requests(&req_ch)
 		}
 	})
-	log.Print("Once.Do done")
 	return c
 }
 
@@ -71,12 +69,9 @@ func (c *Client) call(path string, in interface{}) (io.ReadCloser, error) {
 	req.Header.Set("Authorization", "Bearer "+c.AccessToken)
 	req.Header.Set("Content-Type", "application/json")
 
-	log.Print("Creating response channel")
 	res_ch := make(chan *dbx_response) // Not reused so it doesn't need to be > 1
-	log.Print("Sending download request to channel")
 	req_ch <- &dbx_request{request: req, response_ch: &res_ch}
 
-	log.Print("Getting response from channel.")
 	res := <-res_ch
 
 	r, err := res.body, res.err
@@ -103,28 +98,21 @@ func (c *Client) download(path string, in interface{}, r io.Reader) (io.ReadClos
 		req.Header.Set("Content-Type", "application/octet-stream")
 	}
 
-	log.Print("Creating response channel")
 	res_ch := make(chan *dbx_response) // Not reused so it doesn't need to be > 1
-	log.Print("Sending download request to channel")
 	req_ch <- &dbx_request{request: req, response_ch: &res_ch}
 
-	log.Print("Getting response from channel.")
 	res := <-res_ch
 
 	return res.body, res.content_length, res.err
 }
 
 func background_requests(req_ch *chan *dbx_request) {
-	log.Print("Starting request go routine.")
 	for {
 		select {
 		case dbx_req := <-*req_ch:
-			log.Print("Got a request!")
 			body, content_len, err := do(dbx_req.request)
 			res := &dbx_response{body, content_len, err}
-			log.Print("Sending response")
 			*dbx_req.response_ch <- res
-			log.Print("Closing response channel")
 			close(*dbx_req.response_ch)
 
 		case <-shutdown_ch:
@@ -194,6 +182,7 @@ func do(req *http.Request) (io.ReadCloser, int64, error) {
 			logResponse(req, res, e.Summary)
 			return nil, 0, e
 		} else {
+			logResponse(req, res, "Could not decode text/plain error body.")
 			return nil, 0, err
 		}
 	}
