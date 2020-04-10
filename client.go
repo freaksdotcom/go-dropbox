@@ -155,7 +155,7 @@ request_loop:
 		default:
 			break request_loop
 		}
-		log.Printf("Sleeping for %d seconds.", sleep_time)
+		log.Printf("Sleeping for %.1f seconds.", sleep_time)
 		time.Sleep(time.Duration(sleep_time) * time.Second)
 	}
 	return
