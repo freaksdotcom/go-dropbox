@@ -86,7 +86,7 @@ requestLoop:
 		switch {
 		case res.StatusCode == 429:
 			if ra, err := strconv.Atoi(res.Header.Get("Retry-After")); err != nil {
-				sleepTime = ra
+				sleepTime = float64(ra)
 			} else {
 				sleepTime = 60
 			}
