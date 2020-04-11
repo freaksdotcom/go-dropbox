@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"io/ioutil"
+	"math"
 	"net/http"
 	"strconv"
 	"strings"
@@ -76,23 +77,30 @@ func (c *Client) download(path string, in interface{}, r io.Reader) (io.ReadClos
 func (c *Client) do(req *http.Request) (io.ReadCloser, int64, error) {
 	var err error
 	var res *http.Response
-	error_retry_time := 0.5
-request_loop:
-	for error_retry_time < 300 {
+	var errorCount int
+	maxWaitTime := 300.0
+	var sleepTime float64
+requestLoop:
+	for {
 		res, err = c.HTTPClient.Do(req)
 		switch {
 		case res.StatusCode == 429:
-			sleep_time, conv_e := strconv.Atoi(res.Header.Get("Retry-After"))
-			if conv_e != nil {
-				sleep_time = 60
+			if ra, err := strconv.Atoi(res.Header.Get("Retry-After")); err != nil {
+				sleepTime = ra
+			} else {
+				sleepTime = 60
 			}
-			time.Sleep(time.Duration(sleep_time) * time.Second)
-		case res.StatusCode >= 500: // Retry on 5xx
-			time.Sleep(time.Duration(error_retry_time) * time.Second)
-			error_retry_time *= 1.5
+		case res.StatusCode >= 500: // Retry on 5xx with back off
+			if sleepTime >= maxWaitTime {
+				break requestLoop
+			}
+			errorCount++
+			sleepTime += math.Ceil(float64(errorCount*10)*0.5) / 10
 		default:
-			break request_loop
+			break requestLoop
 		}
+		ioutil.ReadAll(res.Body)
+		time.Sleep(time.Duration(sleepTime) * time.Second)
 	}
 	if err != nil {
 		return nil, 0, err
@@ -103,6 +111,7 @@ request_loop:
 	}
 
 	defer res.Body.Close()
+	defer ioutil.ReadAll(res.Body)
 
 	e := &Error{
 		Status:     http.StatusText(res.StatusCode),
